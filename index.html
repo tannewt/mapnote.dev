@@ -14,17 +14,6 @@ body { margin: 0; padding: 0; }
 </head>
 <body>
 <style>
-    .calculation-box {
-        height: 75px;
-        width: 150px;
-        position: absolute;
-        bottom: 40px;
-        left: 10px;
-        background-color: rgba(255, 255, 255, 0.9);
-        padding: 15px;
-        text-align: center;
-    }
-
     p {
         font-family: 'Open Sans';
         margin: 0;
@@ -38,21 +27,19 @@ body { margin: 0; padding: 0; }
 
 <script>
     console.log(window.location.hash);
-    const start_state = new URLSearchParams(window.location.hash.substring(1));
-    for (const p of start_state) {
-      console.log(p);
-    }
+    var current_hash = window.location.hash.substring(1);
+    const start_state = new URLSearchParams(current_hash);
     var lng = -122.33154900653477;
     if (start_state.has("lng")) {
-        Number.parseFloat(start_state.get("lng"));
+        lng = Number.parseFloat(start_state.get("lng"));
     }
     var lat = 47.60383955605499;
     if (start_state.has("lat")) {
-        Number.parseFloat(start_state.get("lat"));
+        lat = Number.parseFloat(start_state.get("lat"));
     }
     var z = 12;
     if (start_state.has("z")) {
-        Number.parseFloat(start_state.get("z"));
+        z = Number.parseFloat(start_state.get("z"));
     }
     mapboxgl.accessToken = 'pk.eyJ1IjoidGFubmV3dCIsImEiOiJjbDQwMThkYmcwYjQ1M2NwOHdmYzZqeTh2In0.XT3X4lb9vj3wbxWBg9goFA';
     const map = new mapboxgl.Map({
@@ -80,9 +67,7 @@ body { margin: 0; padding: 0; }
     map.on('draw.create', updateArea);
     map.on('draw.delete', updateArea);
     map.on('draw.update', updateArea);
-    var ignore = 0;
     map.on('idle', (event) => {
-        console.log(event);
         const {lng, lat} = map.getCenter();
         const z = map.getZoom();
         let new_state = new URLSearchParams();
@@ -90,36 +75,30 @@ body { margin: 0; padding: 0; }
         new_state.set("lng", lng.toFixed(6));
         new_state.set("lat", lat.toFixed(6));
         new_state.set("z", z.toFixed(2));
-        ignore++;
-        window.location.assign("#" + new_state.toString());
+        current_hash = new_state.toString();
+        window.location.assign("#" + current_hash);
     });
 
     window.addEventListener('hashchange', function(event) {
-      console.log('The hash has changed!', ignore);
-      console.log(window.location.hash);
-      if (ignore > 0) {
-        ignore = 0;
+      if (window.location.hash == current_hash) {
         return;
       }
+      current_hash = window.location.hash;
         const start_state = new URLSearchParams(window.location.hash.substring(1));
-        for (const p of start_state) {
-          console.log(p);
-        }
         var lng = -122.33154900653477;
         if (start_state.has("lng")) {
-            Number.parseFloat(start_state.get("lng"));
+            lng = Number.parseFloat(start_state.get("lng"));
         }
         var lat = 47.60383955605499;
         if (start_state.has("lat")) {
-            Number.parseFloat(start_state.get("lat"));
+            lat = Number.parseFloat(start_state.get("lat"));
         }
         var z = 12;
         if (start_state.has("z")) {
-            Number.parseFloat(start_state.get("z"));
+            z = Number.parseFloat(start_state.get("z"));
         }
         let camera = {center: [lng, lat], zoom: z};
-        console.log("jump", camera);
-        map.jumpTo(camera, {ignore: true});
+        map.jumpTo(camera);
     }, false);
 
 
@@ -138,7 +117,6 @@ body { margin: 0; padding: 0; }
                 alert('Click the map to draw a polygon.');
         }
     }
-    console.log(topojson);
 </script>
 
 </body>
