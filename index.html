@@ -26,65 +26,8 @@ body { margin: 0; padding: 0; }
 <div id="map"></div>
 
 <script>
-    console.log(window.location.hash);
-    var current_hash = window.location.hash.substring(1);
-    const start_state = new URLSearchParams(current_hash);
-    var lng = -122.33154900653477;
-    if (start_state.has("lng")) {
-        lng = Number.parseFloat(start_state.get("lng"));
-    }
-    var lat = 47.60383955605499;
-    if (start_state.has("lat")) {
-        lat = Number.parseFloat(start_state.get("lat"));
-    }
-    var z = 12;
-    if (start_state.has("z")) {
-        z = Number.parseFloat(start_state.get("z"));
-    }
-    mapboxgl.accessToken = 'pk.eyJ1IjoidGFubmV3dCIsImEiOiJjbDQwMThkYmcwYjQ1M2NwOHdmYzZqeTh2In0.XT3X4lb9vj3wbxWBg9goFA';
-    const map = new mapboxgl.Map({
-        container: 'map', // container ID
-        style: 'mapbox://styles/mapbox/streets-v11', // style URL
-        center: [lng, lat], // starting position [lng, lat]
-        zoom: z // starting zoom
-    });
-
-    const draw = new MapboxDraw({
-        displayControlsDefault: false,
-        // Select which mapbox-gl-draw control buttons to add to the map.
-        controls: {
-            polygon: true,
-            line_string: true,
-            point: true,
-            trash: true
-        },
-        // Set mapbox-gl-draw to draw by default.
-        // The user does not have to click the polygon control button first.
-        defaultMode: 'draw_polygon'
-    });
-    map.addControl(draw);
-
-    map.on('draw.create', updateArea);
-    map.on('draw.delete', updateArea);
-    map.on('draw.update', updateArea);
-    map.on('idle', (event) => {
-        const {lng, lat} = map.getCenter();
-        const z = map.getZoom();
-        let new_state = new URLSearchParams();
-        new_state.set("v", 0);
-        new_state.set("lng", lng.toFixed(6));
-        new_state.set("lat", lat.toFixed(6));
-        new_state.set("z", z.toFixed(2));
-        current_hash = new_state.toString();
-        window.location.assign("#" + current_hash);
-    });
-
-    window.addEventListener('hashchange', function(event) {
-      if (window.location.hash == current_hash) {
-        return;
-      }
-      current_hash = window.location.hash;
-        const start_state = new URLSearchParams(window.location.hash.substring(1));
+    function unpack_hash(hash) {
+        const start_state = new URLSearchParams(hash);
         var lng = -122.33154900653477;
         if (start_state.has("lng")) {
             lng = Number.parseFloat(start_state.get("lng"));
@@ -97,25 +40,81 @@ body { margin: 0; padding: 0; }
         if (start_state.has("z")) {
             z = Number.parseFloat(start_state.get("z"));
         }
-        let camera = {center: [lng, lat], zoom: z};
-        map.jumpTo(camera);
-    }, false);
+        var features = {type: "FeatureCollection", features: []};
+        if (start_state.has("topojson")) {
+            features = topojson.feature("x", JSON.parse(decodeURIComponent(start_state.get("topojson"))));
+        }
+        return {camera: {center: [lng, lat], zoom: z}, features: features};
+    }
+
+    var current_hash = window.location.hash.substring(1);
+    let start_state = unpack_hash(current_hash);
+    mapboxgl.accessToken = 'pk.eyJ1IjoidGFubmV3dCIsImEiOiJjbDQwMThkYmcwYjQ1M2NwOHdmYzZqeTh2In0.XT3X4lb9vj3wbxWBg9goFA';
+    const map = new mapboxgl.Map({
+        container: 'map', // container ID
+        style: 'mapbox://styles/mapbox/streets-v11', // style URL
+        center: start_state.camera.center, // starting position [lng, lat]
+        zoom: start_state.camera.zoom // starting zoom
+    });
+
+    const draw = new MapboxDraw({
+        displayControlsDefault: false,
+        // Select which mapbox-gl-draw control buttons to add to the map.
+        controls: {
+            polygon: true,
+            line_string: true,
+            point: true,
+            trash: true
+        },
+    });
+    console.log(start_state.features);
+    // draw.set(start_state.features);
+    map.addControl(draw);
 
 
-    function updateArea(e) {
+    function get_hash() {
+        const {lng, lat} = map.getCenter();
+        const z = map.getZoom();
+        let new_state = new URLSearchParams();
+        new_state.set("v", 0);
+        new_state.set("lng", lng.toFixed(6));
+        new_state.set("lat", lat.toFixed(6));
+        new_state.set("z", z.toFixed(2));
         const data = draw.getAll();
-        const answer = document.getElementById('calculated-area');
         if (data.features.length > 0) {
             // Restrict the area to 2 decimal points.
-            console.log(data);
-            let tj = topojson.topology({foo: data}, 1e6);
-            console.log(encodeURI(JSON.stringify(tj).length));
-            console.log(encodeURI(JSON.stringify(data)).length);
-        } else {
-            answer.innerHTML = '';
-            if (e.type !== 'draw.delete')
-                alert('Click the map to draw a polygon.');
+            console.log("create hash", data);
+            let tj = topojson.topology({x: data}, 1e6);
+            console.log(tj);
+            let tj_encoded = encodeURIComponent(JSON.stringify(tj));
+            console.log("encoded length", tj_encoded.length);
+            new_state.set("topojson", tj_encoded);
         }
+        return new_state.toString();
+    }
+
+    map.on('draw.create', updateArea);
+    map.on('draw.delete', updateArea);
+    map.on('draw.update', updateArea);
+    map.on('idle', (event) => {
+        current_hash = get_hash();
+        window.location.assign("#" + current_hash);
+    });
+
+    window.addEventListener('hashchange', function(event) {
+        if (window.location.hash == current_hash) {
+            return;
+        }
+        current_hash = window.location.hash;
+        const new_state = unpack_hash(window.location.hash.substring(1));
+        console.log("hashchange", new_state.features);
+        draw.set(new_state.features);
+        map.jumpTo(new_state.camera);
+    }, false);
+
+    function updateArea(e) {
+        current_hash = get_hash();
+        window.location.assign("#" + current_hash);
     }
 </script>
 
