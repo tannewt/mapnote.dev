@@ -7,6 +7,8 @@
 <link href="https://api.mapbox.com/mapbox-gl-js/v2.8.2/mapbox-gl.css" rel="stylesheet">
 <script src="https://api.mapbox.com/mapbox-gl-js/v2.8.2/mapbox-gl.js"></script>
 <script src="https://unpkg.com/topojson@3"></script>
+<script defer data-domain="mapnote.dev" src="https://plausible.io/js/plausible.js"></script>
+
 <style>
 body { margin: 0; padding: 0; }
 #map { position: absolute; top: 0; bottom: 0; width: 100%; }
@@ -26,27 +28,8 @@ body { margin: 0; padding: 0; }
 <div id="map"></div>
 
 <script>
-    function unpack_hash(hash) {
-        const start_state = new URLSearchParams(hash);
-        var lng = -122.33154900653477;
-        if (start_state.has("lng")) {
-            lng = Number.parseFloat(start_state.get("lng"));
-        }
-        var lat = 47.60383955605499;
-        if (start_state.has("lat")) {
-            lat = Number.parseFloat(start_state.get("lat"));
-        }
-        var z = 12;
-        if (start_state.has("z")) {
-            z = Number.parseFloat(start_state.get("z"));
-        }
-        var features = {type: "FeatureCollection", features: []};
-        if (start_state.has("topojson")) {
-            features = topojson.feature("x", JSON.parse(decodeURIComponent(start_state.get("topojson"))));
-        }
-        return {camera: {center: [lng, lat], zoom: z}, features: features};
-    }
 
+    var tj_encoded = "";
     var current_hash = window.location.hash.substring(1);
     let start_state = unpack_hash(current_hash);
     mapboxgl.accessToken = 'pk.eyJ1IjoidGFubmV3dCIsImEiOiJjbDQwMThkYmcwYjQ1M2NwOHdmYzZqeTh2In0.XT3X4lb9vj3wbxWBg9goFA';
@@ -67,12 +50,35 @@ body { margin: 0; padding: 0; }
             trash: true
         },
     });
-    console.log(start_state.features);
-    // draw.set(start_state.features);
+
     map.addControl(draw);
+    if (start_state.features.features.length > 0) {
+        draw.set(start_state.features);
+    }
+    function unpack_hash(hash) {
+        const start_state = new URLSearchParams(hash);
+        var lng = -122.33154900653477;
+        if (start_state.has("lng")) {
+            lng = Number.parseFloat(start_state.get("lng"));
+        }
+        var lat = 47.60383955605499;
+        if (start_state.has("lat")) {
+            lat = Number.parseFloat(start_state.get("lat"));
+        }
+        var z = 12;
+        if (start_state.has("z")) {
+            z = Number.parseFloat(start_state.get("z"));
+        }
+        var features = {type: "FeatureCollection", features: []};
+        if (start_state.has("topojson")) {
+            tj_encoded = start_state.get("topojson");
+            let parsed = JSON.parse(decodeURIComponent(tj_encoded));
+            features = topojson.feature(parsed, parsed.objects["x"]);
+        }
+        return {camera: {center: [lng, lat], zoom: z}, features: features};
+    }
 
-
-    function get_hash() {
+    function get_hash(update_geometry) {
         const {lng, lat} = map.getCenter();
         const z = map.getZoom();
         let new_state = new URLSearchParams();
@@ -81,13 +87,11 @@ body { margin: 0; padding: 0; }
         new_state.set("lat", lat.toFixed(6));
         new_state.set("z", z.toFixed(2));
         const data = draw.getAll();
-        if (data.features.length > 0) {
-            // Restrict the area to 2 decimal points.
-            console.log("create hash", data);
-            let tj = topojson.topology({x: data}, 1e6);
-            console.log(tj);
-            let tj_encoded = encodeURIComponent(JSON.stringify(tj));
-            console.log("encoded length", tj_encoded.length);
+        if (data.features.length > 0 && update_geometry) {
+            let tj = topojson.topology({"x": data}, 1e6);
+            tj_encoded = encodeURIComponent(JSON.stringify(tj));
+        }
+        if (tj_encoded != "") {
             new_state.set("topojson", tj_encoded);
         }
         return new_state.toString();
@@ -97,7 +101,7 @@ body { margin: 0; padding: 0; }
     map.on('draw.delete', updateArea);
     map.on('draw.update', updateArea);
     map.on('idle', (event) => {
-        current_hash = get_hash();
+        current_hash = get_hash(false);
         window.location.assign("#" + current_hash);
     });
 
@@ -107,13 +111,12 @@ body { margin: 0; padding: 0; }
         }
         current_hash = window.location.hash;
         const new_state = unpack_hash(window.location.hash.substring(1));
-        console.log("hashchange", new_state.features);
         draw.set(new_state.features);
         map.jumpTo(new_state.camera);
     }, false);
 
     function updateArea(e) {
-        current_hash = get_hash();
+        current_hash = get_hash(true);
         window.location.assign("#" + current_hash);
     }
 </script>
